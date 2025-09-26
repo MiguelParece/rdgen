@@ -134,6 +134,7 @@ jobs:
           echo "STATUS_URL=${{ inputs.apiServer }}/api/updategh" >> $env:GITHUB_ENV
 
       - name: Report Status
+        if: ${{ env.STATUS_URL != '' && startsWith(env.STATUS_URL, 'http') }}
         uses: fjogeleit/http-request-action@v1
         continue-on-error: true
         with:
@@ -279,6 +280,7 @@ jobs:
           version: ${{ env.LLVM_VERSION }}
 
       - name: Report Status
+        if: ${{ env.STATUS_URL != '' && startsWith(env.STATUS_URL, 'http') }}
         uses: fjogeleit/http-request-action@v1
         continue-on-error: true
         with:
@@ -317,6 +319,7 @@ jobs:
           components: "rustfmt"
 
       - name: Report Status
+        if: ${{ env.STATUS_URL != '' && startsWith(env.STATUS_URL, 'http') }}
         uses: fjogeleit/http-request-action@v1
         continue-on-error: true
         with:
@@ -330,6 +333,7 @@ jobs:
           prefix-key: ${{ matrix.job.os }}
         
       - name: Report Status
+        if: ${{ env.STATUS_URL != '' && startsWith(env.STATUS_URL, 'http') }}
         uses: fjogeleit/http-request-action@v1
         continue-on-error: true
         with:
