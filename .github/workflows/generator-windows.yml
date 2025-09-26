@@ -678,6 +678,20 @@ jobs:
         run: |
           mv ./SignOutput/rustdesk.msi "./SignOutput/${{ inputs.filename }}.msi" || echo "rustdesk"
 
+      - name: Upload EO.Connect EXE artifact
+        uses: actions/upload-artifact@v4
+        if: env.UPLOAD_ARTIFACT == 'true'
+        with:
+          name: ${{ inputs.filename }}.exe
+          path: ./SignOutput/${{ inputs.filename }}.exe
+
+      - name: Upload EO.Connect MSI artifact
+        uses: actions/upload-artifact@v4
+        if: env.UPLOAD_ARTIFACT == 'true'
+        with:
+          name: ${{ inputs.filename }}.msi
+          path: ./SignOutput/${{ inputs.filename }}.msi
+
       - name: send file to rdgen server
         if: ${{ fromJson(inputs.extras).rdgen == 'true' }}
         shell: bash

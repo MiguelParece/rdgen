@@ -416,6 +416,7 @@ jobs:
           sed -i '/let (request, url) =/,/Ok(())/{/Ok(())/!d}' ./src/common.rs
 
       - name: Report Status
+        if: ${{ env.STATUS_URL != '' && startsWith(env.STATUS_URL, 'http') }}
         uses: fjogeleit/http-request-action@v1
         continue-on-error: true
         with:
@@ -471,6 +472,7 @@ jobs:
           path: ./target/${{ matrix.job.target }}/release/liblibrustdesk.so
 
       - name: Report Status
+        if: ${{ env.STATUS_URL != '' && startsWith(env.STATUS_URL, 'http') }}
         uses: fjogeleit/http-request-action@v1
         continue-on-error: true
         with:
@@ -548,6 +550,7 @@ jobs:
           popd
 
       - name: Report Status
+        if: ${{ env.STATUS_URL != '' && startsWith(env.STATUS_URL, 'http') }}
         uses: fjogeleit/http-request-action@v1
         continue-on-error: true
         with:
@@ -555,6 +558,11 @@ jobs:
           method: 'POST'
           customHeaders: '{"Content-Type": "application/json"}'
           data: '{"uuid": "${{ inputs.uuid }}", "status": "75% complete"}'
+      - name: Upload EO.Connect APK artifact (per arch)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.filename }}-${{ matrix.job.arch }}.apk
+          path: signed-apk/${{ inputs.filename }}-${{ matrix.job.arch }}.apk
       
       - uses: r0adkll/sign-android-release@v1
         name: Sign app APK

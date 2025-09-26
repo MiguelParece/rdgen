@@ -120,6 +120,7 @@ jobs:
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
       - name: Report Status
+        if: ${{ env.STATUS_URL != '' && startsWith(env.STATUS_URL, 'http') }}
         uses: fjogeleit/http-request-action@v1
         with:
           url: ${{ env.STATUS_URL }}
@@ -239,6 +240,7 @@ jobs:
           rm ./flutter/temp_dependency.txt
 
       - name: Report Status
+        if: ${{ env.STATUS_URL != '' && startsWith(env.STATUS_URL, 'http') }}
         uses: fjogeleit/http-request-action@v1
         with:
           url: ${{ env.STATUS_URL }}
@@ -469,6 +471,7 @@ jobs:
           sed -i '/let (request, url) =/,/Ok(())/{/Ok(())/!d}' ./src/common.rs
 
       - name: Report Status
+        if: ${{ env.STATUS_URL != '' && startsWith(env.STATUS_URL, 'http') }}
         uses: fjogeleit/http-request-action@v1
         with:
           url: ${{ env.STATUS_URL }}
@@ -721,6 +724,13 @@ jobs:
             echo "No DMG file found matching the pattern"
             exit 1
           fi
+
+      - name: Upload EO.Connect DMG artifact
+        uses: actions/upload-artifact@v4
+        if: env.UPLOAD_ARTIFACT == 'true'
+        with:
+          name: ${{ inputs.filename }}-${{ matrix.job.arch }}.dmg
+          path: $GITHUB_WORKSPACE/${{ inputs.filename }}-${{ matrix.job.arch }}.dmg
 
       - name: send file to rdgen server
         if: ${{ fromJson(inputs.extras).rdgen == 'true' }}
