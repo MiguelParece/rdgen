@@ -144,15 +144,6 @@ jobs:
         run: |
           echo "STATUS_URL=${{ inputs.apiServer }}/api/updategh" >> $GITHUB_ENV
 
-      - name: Report Status
-        uses: fjogeleit/http-request-action@v1
-        continue-on-error: true
-        with:
-          url: ${{ env.STATUS_URL }}
-          method: 'POST'
-          customHeaders: '{"Content-Type": "application/json"}'
-          data: '{"uuid": "${{ inputs.uuid }}", "status": "5% complete"}'
-
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -204,6 +195,11 @@ jobs:
         with:
           repository: rustdesk/rustdesk
           submodules: recursive
+
+      - name: Re-checkout rdgen repository for resources (after rustdesk checkout)
+        uses: actions/checkout@v4
+        with:
+          path: ./rdgen-resources
 
       - name: Install flutter
         uses: subosito/flutter-action@v2
@@ -278,14 +274,13 @@ jobs:
 
       ###########################################################echo "${{ inputs.iconbase64 }}" | base64 -d > ./res/icon.png
       - name: icon stuff
-        if: ${{ inputs.iconlink != 'false' }}
         continue-on-error: true
         shell: bash
         run: |
           mv ./res/icon.ico ./res/icon.ico.bak
           mv ./res/icon.png ./res/icon.png.bak
           mv ./res/tray-icon.ico ./res/tray-icon.ico.bak
-          wget -O ./res/icon.png ${{ fromJson(inputs.iconlink).url }}/get_png?filename=${{ fromJson(inputs.iconlink).file }}"&"uuid=${{ fromJson(inputs.iconlink).uuid }}
+          cp ./rdgen-resources/util/icon.png ./res/icon.png
           mv ./res/32x32.png ./res/32x32.png.bak
           mv ./res/64x64.png ./res/64x64.png.bak
           mv ./res/128x128.png ./res/128x128.png.bak
@@ -415,17 +410,7 @@ jobs:
           sed -i -e 's|updateUrl.isNotEmpty|false|' ./flutter/lib/desktop/pages/desktop_home_page.dart
           sed -i '/let (request, url) =/,/Ok(())/{/Ok(())/!d}' ./src/common.rs
 
-      - name: Report Status
-        uses: fjogeleit/http-request-action@v1
-        continue-on-error: true
-        with:
-          url: ${{ env.STATUS_URL }}
-          method: 'POST'
-          customHeaders: '{"Content-Type": "application/json"}'
-          data: '{"uuid": "${{ inputs.uuid }}", "status": "35% complete"}'
-
       - name: replace flutter icons
-        if: ${{ inputs.iconlink != 'false' }}
         run: |
           pushd ./flutter
           flutter pub get
@@ -470,17 +455,7 @@ jobs:
           name: librustdesk.so.${{ matrix.job.target }}
           path: ./target/${{ matrix.job.target }}/release/liblibrustdesk.so
 
-      - name: Report Status
-        uses: fjogeleit/http-request-action@v1
-        continue-on-error: true
-        with:
-          url: ${{ env.STATUS_URL }}
-          method: 'POST'
-          customHeaders: '{"Content-Type": "application/json"}'
-          data: '{"uuid": "${{ inputs.uuid }}", "status": "45% complete"}'
-
       - name: icons
-        if: ${{ inputs.iconlink != 'false' }}
         continue-on-error: true
         run: |
           mv ./flutter/assets/icon.svg ./flutter/assets/icon.svg.bak
@@ -547,15 +522,6 @@ jobs:
           mv ../rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk ./${{ inputs.filename }}-${{ matrix.job.arch }}.apk
           popd
 
-      - name: Report Status
-        uses: fjogeleit/http-request-action@v1
-        continue-on-error: true
-        with:
-          url: ${{ env.STATUS_URL }}
-          method: 'POST'
-          customHeaders: '{"Content-Type": "application/json"}'
-          data: '{"uuid": "${{ inputs.uuid }}", "status": "75% complete"}'
-      
       - uses: r0adkll/sign-android-release@v1
         name: Sign app APK
         continue-on-error: true
@@ -583,14 +549,11 @@ jobs:
         run: |
           curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ fromJson(inputs.extras).token }}" -F "file=@./signed-apk/${{ inputs.filename }}-${{ matrix.job.arch }}.apk" ${{ inputs.apiServer }}/api/save_custom_client
 
-      - name: Report Status
-        uses: fjogeleit/http-request-action@v1
-        continue-on-error: true
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@master
         with:
-          url: ${{ env.STATUS_URL }}
-          method: 'POST'
-          customHeaders: '{"Content-Type": "application/json"}'
-          data: '{"uuid": "${{ inputs.uuid }}", "status": "Success"}'
+          name: ${{ inputs.filename }}-${{ matrix.job.arch }}.apk
+          path: ./signed-apk/${{ inputs.filename }}-${{ matrix.job.arch }}.apk
 
       - name: failed
         if: failure()

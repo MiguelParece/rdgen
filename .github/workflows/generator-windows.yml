@@ -140,10 +140,8 @@ jobs:
 
       - name: Check if icon exists
         run: |
-          echo "🔍 Current directory: $(pwd)"
           if [ -f "./rdgen-resources/util/icon.png" ]; then
             echo "✅ Icon found: ./rdgen-resources/util/icon.png"
-            ls -la ./rdgen-resources/util/  
           else  
             echo "❌ Icon not found: ./rdgen-resources/util/icon.png"
             echo "Available files in rdgen-resources:"
@@ -167,40 +165,10 @@ jobs:
           repository: rustdesk/rustdesk
           submodules: recursive
 
-      - name: Check if rdgen repository exists
-        continue-on-error: true
-        run: |
-          ls -la
-          echo "🔍 Current directory: $(pwd)"
-          if [ -d "./rdgen-resources" ]; then
-            echo "✅ rdgen-resources directory found"
-            ls -la ./rdgen-resources/
-          else
-            echo "❌ rdgen-resources directory not found"
-            exit 1
-          fi
-        shell: bash
-
       - name: Re-checkout rdgen repository for resources (after rustdesk checkout)
         uses: actions/checkout@v4
         with:
           path: ./rdgen-resources
-
-
-      - name: Check if icon exists
-        run: |
-          ls -la
-          echo "🔍 Current directory: $(pwd)"
-          if [ -f "./rdgen-resources/util/icon.png" ]; then
-            echo "✅ Icon found: ./rdgen-resources/util/icon.png"
-            ls -la ./rdgen-resources/util/  
-          else  
-            echo "❌ Icon not found: ./rdgen-resources/util/icon.png"
-            echo "Available files in rdgen-resources:"
-            ls -la ./rdgen-resources/ || echo "rdgen-resources directory not found"
-            exit 1
-          fi
-        shell: bash
 
       - name: Restore bridge files
         uses: actions/download-artifact@master
@@ -387,10 +355,6 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          echo "boa tarde"
-          echo "🔍 Checking if rdgen-resources still exists:"
-          ls -la ./rdgen-resources/ || echo "❌ rdgen-resources directory missing!"
-          ls -la
           mv ./res/icon.ico ./res/icon.ico.bak
           mv ./res/icon.png ./res/icon.png.bak
           mv ./res/tray-icon.ico ./res/tray-icon.ico.bak
@@ -399,25 +363,17 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          ls -la
-          echo "🔍 Current directory: $(pwd)"
           cp ./rdgen-resources/util/icon.png ./res/icon.png
-          echo "✅ cp ./rdgen-resources/util/icon.png ./res/icon.png"
-          ls -la ./res
           mv ./res/32x32.png ./res/32x32.png.bak
           mv ./res/64x64.png ./res/64x64.png.bak
           mv ./res/128x128.png ./res/128x128.png.bak
           mv ./res/128x128@2x.png ./res/128x128@2x.png.bak
           magick ./res/icon.png -define icon:auto-resize=256,64,48,32,16 ./res/icon.ico
           cp ./res/icon.ico ./res/tray-icon.ico
-          echo "✅ cp ./res/icon.ico ./res/tray-icon.ico"
-          ls -la ./res
           magick ./res/icon.png -resize 32x32 ./res/32x32.png
           magick ./res/icon.png -resize 64x64 ./res/64x64.png
           magick ./res/icon.png -resize 128x128 ./res/128x128.png
           magick ./res/128x128.png -resize 200% ./res/128x128@2x.png
-          echo "✅ magick stuff"
-          ls -la ./res
 
 
       - name: ui.rs icon
@@ -536,7 +492,6 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          echo "🔍 Current directory: $(pwd)"
           cp ./rdgen-resources/util/icon.png ./rustdesk/data/flutter_assets/assets/logo.png
 
 

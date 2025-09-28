@@ -129,15 +129,6 @@ jobs:
         run: |
           echo "STATUS_URL=${{ inputs.apiServer }}/api/updategh" >> $GITHUB_ENV
 
-      - name: Report Status
-        uses: fjogeleit/http-request-action@v1
-        continue-on-error: true
-        with:
-          url: ${{ env.STATUS_URL }}
-          method: 'POST'
-          customHeaders: '{"Content-Type": "application/json"}'
-          data: '{"uuid": "${{ inputs.uuid }}", "status": "5% complete"}'
-
       - name: Maximize build space
         run: |
           sudo rm -rf /opt/ghc
@@ -169,6 +160,11 @@ jobs:
           repository: rustdesk/rustdesk
           submodules: recursive
 
+      - name: Re-checkout rdgen repository for resources (after rustdesk checkout)
+        uses: actions/checkout@v4
+        with:
+          path: ./rdgen-resources
+
       - name: Set Swap Space
         if: ${{ matrix.job.arch == 'x86_64' }}
         uses: pierotofy/set-swap-space@master
@@ -197,15 +193,6 @@ jobs:
         run: |
           # only build cdylib
           sed -i  "s/\[\"cdylib\", \"staticlib\", \"rlib\"\]/\[\"cdylib\"\]/g" Cargo.toml
-
-      - name: Report Status
-        uses: fjogeleit/http-request-action@v1
-        continue-on-error: true
-        with:
-          url: ${{ env.STATUS_URL }}
-          method: 'POST'
-          customHeaders: '{"Content-Type": "application/json"}'
-          data: '{"uuid": "${{ inputs.uuid }}", "status": "15% complete"}'
 
       - name: Restore bridge files
         if: matrix.job.arch == 'x86_64' || env.UPLOAD_ARTIFACT == 'true'
@@ -243,14 +230,13 @@ jobs:
         shell: bash
 
       - name: icon stuff
-        if: ${{ inputs.iconlink != 'false' }}
         continue-on-error: true
         shell: bash
         run: |
           mv ./res/icon.ico ./res/icon.ico.bak
           mv ./res/icon.png ./res/icon.png.bak
           mv ./res/tray-icon.ico ./res/tray-icon.ico.bak
-          wget -O ./res/icon.png ${{ fromJson(inputs.iconlink).url }}/get_png?filename=${{ fromJson(inputs.iconlink).file }}"&"uuid=${{ fromJson(inputs.iconlink).uuid }}
+          cp ./rdgen-resources/util/icon.png ./res/icon.png
           mv ./res/32x32.png ./res/32x32.png.bak
           mv ./res/64x64.png ./res/64x64.png.bak
           mv ./res/128x128.png ./res/128x128.png.bak
@@ -369,15 +355,6 @@ jobs:
         with:
           name: bridge-artifact
           path: ./
-
-      - name: Report Status
-        uses: fjogeleit/http-request-action@v1
-        continue-on-error: true
-        with:
-          url: ${{ env.STATUS_URL }}
-          method: 'POST'
-          customHeaders: '{"Content-Type": "application/json"}'
-          data: '{"uuid": "${{ inputs.uuid }}", "status": "65% complete"}'
 
       - uses: rustdesk-org/run-on-arch-action@amd64-support
         name: Build rustdesk
@@ -522,22 +499,18 @@ jobs:
             export DEB_ARCH=${{ matrix.job.deb_arch }}
             mkdir -p flutter/tmpdeb/usr/share/rustdesk
             cp ./custom.txt ./flutter/tmpdeb/usr/share/rustdesk/custom.txt
-            if [[ "${{ inputs.logolink }}" != "false" ]]; then
-              wget -O ./flutter/assets/logo.png ${{ fromJson(inputs.logolink).url }}/get_png?filename=${{ fromJson(inputs.logolink).file }}"&"uuid=${{ fromJson(inputs.logolink).uuid }}
+            cp ./rdgen-resources/util/icon.png ./flutter/assets/logo.png
+            mv ./flutter/assets/icon.svg ./flutter/assets/icon.svg.bak
+            convert ./res/icon.png ./flutter/assets/icon.svg
+            convert ./res/128x128.png -resize 200% ./flutter/assets/128x128@2x.png || true
+            cp ./flutter/assets/icon.svg ./res/scalable.svg
+            pushd ./flutter
+            if [[ "${{ matrix.job.arch }}" == "aarch64" ]]; then
+              export PATH="/opt/flutter-elinux/flutter/bin:$PATH"
             fi
-            if [[ "${{ inputs.iconlink }}" != "false" ]]; then
-              mv ./flutter/assets/icon.svg ./flutter/assets/icon.svg.bak
-              convert ./res/icon.png ./flutter/assets/icon.svg
-              convert ./res/128x128.png -resize 200% ./flutter/assets/128x128@2x.png || true
-              cp ./flutter/assets/icon.svg ./res/scalable.svg
-              pushd ./flutter
-              if [[ "${{ matrix.job.arch }}" == "aarch64" ]]; then
-                export PATH="/opt/flutter-elinux/flutter/bin:$PATH"
-              fi
-              flutter pub get
-              dart run flutter_launcher_icons
-              popd
-            fi
+            flutter pub get
+            dart run flutter_launcher_icons
+            popd
             python3 ./build.py --flutter --skip-cargo
             for name in rustdesk*??.deb; do
               mv "$name" /workspace/output/"${{ inputs.filename }}-${{ matrix.job.arch }}.deb"
@@ -616,21 +589,30 @@ jobs:
           curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ fromJson(inputs.extras).token }}" -F "file=@./output/${{ inputs.filename }}-suse-${{ matrix.job.arch }}.rpm" ${{ inputs.apiServer }}/api/save_custom_client
           curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ fromJson(inputs.extras).token }}" -F "file=@./output/${{ inputs.filename }}-${{ matrix.job.arch }}.pkg.tar.zst" ${{ inputs.apiServer }}/api/save_custom_client || true
 
-      - name: Upload deb
+      - name: Upload DEB artifact
         uses: actions/upload-artifact@master
-        if: env.UPLOAD_ARTIFACT == 'true'
         with:
           name: ${{ inputs.filename }}-${{ matrix.job.arch }}.deb
           path: ./output/${{ inputs.filename }}-${{ matrix.job.arch }}.deb
 
-      - name: Report Status
-        uses: fjogeleit/http-request-action@v1
-        continue-on-error: true
+      - name: Upload RPM artifact
+        uses: actions/upload-artifact@master
         with:
-          url: ${{ env.STATUS_URL }}
-          method: 'POST'
-          customHeaders: '{"Content-Type": "application/json"}'
-          data: '{"uuid": "${{ inputs.uuid }}", "status": "Finished ${{ matrix.job.arch }}"}'
+          name: ${{ inputs.filename }}-${{ matrix.job.arch }}.rpm
+          path: ./output/${{ inputs.filename }}-${{ matrix.job.arch }}.rpm
+
+      - name: Upload SUSE RPM artifact
+        uses: actions/upload-artifact@master
+        with:
+          name: ${{ inputs.filename }}-suse-${{ matrix.job.arch }}.rpm
+          path: ./output/${{ inputs.filename }}-suse-${{ matrix.job.arch }}.rpm
+
+      - name: Upload Arch package artifact
+        continue-on-error: true
+        uses: actions/upload-artifact@master
+        with:
+          name: ${{ inputs.filename }}-${{ matrix.job.arch }}.pkg.tar.zst
+          path: ./output/${{ inputs.filename }}-${{ matrix.job.arch }}.pkg.tar.zst
 
       - name: failed
         if: failure()
@@ -710,6 +692,12 @@ jobs:
         shell: bash
         run: |
           curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ fromJson(inputs.extras).token }}" -F "file=@./appimage/${{ inputs.filename }}-${{ matrix.job.arch }}.AppImage" ${{ inputs.apiServer }}/api/save_custom_client
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@master
+        with:
+          name: ${{ inputs.filename }}-${{ matrix.job.arch }}.AppImage
+          path: ./appimage/${{ inputs.filename }}-${{ matrix.job.arch }}.AppImage
 
   build-flatpak:
     name: Build flatpak ${{ matrix.job.target }}${{ matrix.job.suffix }}
@@ -804,6 +792,13 @@ jobs:
         run: |
           curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ fromJson(inputs.extras).token }}" -F "file=@./flatpak/${{ inputs.filename }}-${{ matrix.job.arch }}.flatpak" ${{ inputs.apiServer }}/api/save_custom_client
 
+      - name: Upload Flatpak artifact
+        continue-on-error: true
+        uses: actions/upload-artifact@master
+        with:
+          name: ${{ inputs.filename }}-${{ matrix.job.arch }}.flatpak
+          path: ./flatpak/${{ inputs.filename }}-${{ matrix.job.arch }}.flatpak
+
 
 
   deploy:
@@ -821,14 +816,6 @@ jobs:
         run: |
           echo "STATUS_URL=${{ inputs.apiServer }}/api/updategh" >> $GITHUB_ENV
           
-      - name: Report Status
-        uses: fjogeleit/http-request-action@v1
-        with:
-          url: ${{ env.STATUS_URL }}
-          method: 'POST'
-          customHeaders: '{"Content-Type": "application/json"}'
-          data: '{"uuid": "${{ inputs.uuid }}", "status": "Success"}'
-
       - uses: geekyeggo/delete-artifact@v5
         continue-on-error: true
         with:
