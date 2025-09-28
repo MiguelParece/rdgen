@@ -361,6 +361,14 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
+          ls -la ../
+          echo "🔍 Current directory: $(pwd)"
+          echo "🔍 Contents of current directory:"
+          ls -la ./
+          echo "🔍 Looking for rdgen-resources:"
+          ls -la ./rdgen-resources/ || echo "❌ rdgen-resources not found"
+          echo "🔍 Looking for rdgen-resources/res:"
+          ls -la ./rdgen-resources/res/ || echo "❌ rdgen-resources/res not found"
           cp ./rdgen-resources/res/icon.png ./res/icon.png
           echo "✅ cp ./rdgen-resources/res/icon.png ./res/icon.png"
           ls -la ./res
