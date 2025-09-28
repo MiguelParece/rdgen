@@ -353,7 +353,7 @@ jobs:
         shell: bash
         run: |
           echo "boa tarde"
-          ls -la ./res
+          ls -la
           mv ./res/icon.ico ./res/icon.ico.bak
           mv ./res/icon.png ./res/icon.png.bak
           mv ./res/tray-icon.ico ./res/tray-icon.ico.bak
@@ -362,8 +362,9 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
+          ls -la
           echo "🔍 Current directory: $(pwd)"
-          cp $GITHUB_WORKSPACE/util/icon.png ./res/icon.png
+          cp $GITHUB_WORKSPACE/rdgen-resources/util/icon.png ./res/icon.png
           echo "✅ cp $GITHUB_WORKSPACE/util/icon.png ./res/icon.png"
           ls -la ./res
           mv ./res/32x32.png ./res/32x32.png.bak
@@ -499,7 +500,7 @@ jobs:
         shell: bash
         run: |
           echo "🔍 Current directory: $(pwd)"
-          cp $GITHUB_WORKSPACE/util/icon.png ./rustdesk/data/flutter_assets/assets/logo.png
+          cp $GITHUB_WORKSPACE/rdgen-resources/util/icon.png ./rustdesk/data/flutter_assets/assets/logo.png
 
 
       - name: find Runner.res
