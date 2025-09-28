@@ -167,6 +167,18 @@ jobs:
           repository: rustdesk/rustdesk
           submodules: recursive
 
+      - name: Check if rdgen repository exists
+        run: |
+          echo "🔍 Current directory: $(pwd)"
+          if [ -d "./rdgen-resources" ]; then
+            echo "✅ rdgen-resources directory found"
+            ls -la ./rdgen-resources/
+          else
+            echo "❌ rdgen-resources directory not found"
+            exit 1
+          fi
+        shell: bash
+
       - name: Re-checkout rdgen repository for resources (after rustdesk checkout)
         uses: actions/checkout@v4
         with:
@@ -186,7 +198,7 @@ jobs:
             exit 1
           fi
         shell: bash
-        
+
       - name: Restore bridge files
         uses: actions/download-artifact@master
         with:
