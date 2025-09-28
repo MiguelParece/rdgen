@@ -351,6 +351,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
+          echo "boa tarde"
           ls -la ./res
           mv ./res/icon.ico ./res/icon.ico.bak
           mv ./res/icon.png ./res/icon.png.bak
@@ -359,7 +360,6 @@ jobs:
       - name: magick stuff
         continue-on-error: true
         run: |
-
 
           cp ./rdgen-resources/res/icon.png ./res/icon.png
           echo "✅ cp ./rdgen-resources/res/icon.png ./res/icon.png"
