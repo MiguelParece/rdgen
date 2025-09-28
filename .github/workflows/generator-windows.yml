@@ -138,6 +138,19 @@ jobs:
         with:
           path: ./rdgen-resources
 
+      - name: Check if icon exists
+        run: |
+          if [ -f "./rdgen-resources/res/icon.png" ]; then
+            echo "✅ Icon found: ./rdgen-resources/res/icon.png"
+            ls -la ./rdgen-resources/res/
+          else
+            echo "❌ Icon not found: ./rdgen-resources/res/icon.png"
+            echo "Available files in rdgen-resources:"
+            ls -la ./rdgen-resources/ || echo "rdgen-resources directory not found"
+            exit 1
+          fi
+        shell: bash
+
       - name: Checkout source code
         if: ${{ env.VERSION != 'master' }}
         uses: actions/checkout@v4
@@ -347,7 +360,7 @@ jobs:
         run: |
           echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
           ls -l $GITHUB_WORKSPACE
-          cp ./rdgen-resources/res/icon.png ./res/icon.png
+          cp $GITHUB_WORKSPACE/res/icon.png ./res/icon.png
           mv ./res/32x32.png ./res/32x32.png.bak
           mv ./res/64x64.png ./res/64x64.png.bak
           mv ./res/128x128.png ./res/128x128.png.bak
@@ -475,7 +488,7 @@ jobs:
       - name: logo stuff
         continue-on-error: true
         run: |
-          cp ./rdgen-resources/res/icon.png ./rustdesk/data/flutter_assets/assets/logo.png
+          cp $GITHUB_WORKSPACE/res/icon.png ./rustdesk/data/flutter_assets/assets/logo.png
 
 
       - name: find Runner.res
