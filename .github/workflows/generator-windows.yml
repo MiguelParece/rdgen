@@ -133,6 +133,11 @@ jobs:
         run: |
           echo "STATUS_URL=${{ inputs.apiServer }}/api/updategh" >> $env:GITHUB_ENV
 
+      - name: Checkout rdgen repository for resources
+        uses: actions/checkout@v4
+        with:
+          path: ./rdgen-resources
+
       - name: Checkout source code
         if: ${{ env.VERSION != 'master' }}
         uses: actions/checkout@v4
@@ -340,7 +345,9 @@ jobs:
       - name: magick stuff
         continue-on-error: true
         run: |
-          cp $GITHUB_WORKSPACE/res/icon.png ./res/icon.png
+          echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
+          ls -l $GITHUB_WORKSPACE
+          cp ./rdgen-resources/res/icon.png ./res/icon.png
           mv ./res/32x32.png ./res/32x32.png.bak
           mv ./res/64x64.png ./res/64x64.png.bak
           mv ./res/128x128.png ./res/128x128.png.bak
@@ -468,7 +475,7 @@ jobs:
       - name: logo stuff
         continue-on-error: true
         run: |
-          cp $GITHUB_WORKSPACE/res/icon.png ./rustdesk/data/flutter_assets/assets/logo.png
+          cp ./rdgen-resources/res/icon.png ./rustdesk/data/flutter_assets/assets/logo.png
 
 
       - name: find Runner.res
