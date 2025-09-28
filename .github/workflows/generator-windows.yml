@@ -141,11 +141,11 @@ jobs:
       - name: Check if icon exists
         run: |
           echo "🔍 Current directory: $(pwd)"
-          if [ -f "./rdgen-resources/res/icon.png" ]; then
-            echo "✅ Icon found: ./rdgen-resources/res/icon.png"
-            ls -la ./rdgen-resources/res/
-          else
-            echo "❌ Icon not found: ./rdgen-resources/res/icon.png"
+          if [ -f "./rdgen-resources/util/icon.png" ]; then
+            echo "✅ Icon found: ./rdgen-resources/util/icon.png"
+            ls -la ./rdgen-resources/util/  
+          else  
+            echo "❌ Icon not found: ./rdgen-resources/util/icon.png"
             echo "Available files in rdgen-resources:"
             ls -la ./rdgen-resources/ || echo "rdgen-resources directory not found"
             exit 1
