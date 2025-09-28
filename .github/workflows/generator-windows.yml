@@ -359,8 +359,6 @@ jobs:
       - name: magick stuff
         continue-on-error: true
         run: |
-          echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
-          ls -la $GITHUB_WORKSPACE
 
 
           cp ./rdgen-resources/res/icon.png ./res/icon.png
