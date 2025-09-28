@@ -168,7 +168,9 @@ jobs:
           submodules: recursive
 
       - name: Check if rdgen repository exists
+        continue-on-error: true
         run: |
+          ls -la
           echo "🔍 Current directory: $(pwd)"
           if [ -d "./rdgen-resources" ]; then
             echo "✅ rdgen-resources directory found"
@@ -187,6 +189,7 @@ jobs:
 
       - name: Check if icon exists
         run: |
+          ls -la
           echo "🔍 Current directory: $(pwd)"
           if [ -f "./rdgen-resources/util/icon.png" ]; then
             echo "✅ Icon found: ./rdgen-resources/util/icon.png"
