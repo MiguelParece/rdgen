@@ -543,11 +543,6 @@ jobs:
         run: |
           curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ fromJson(inputs.extras).token }}" -F "file=@./signed-apk/${{ inputs.filename }}-${{ matrix.job.arch }}.apk" -F "uuid=${{ inputs.uuid }}" ${{ secrets.GENURL }}/save_custom_client
 
-      - name: send file to api server
-        if: ${{ fromJson(inputs.extras).rdgen == 'false' }}
-        shell: bash
-        run: |
-          curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ fromJson(inputs.extras).token }}" -F "file=@./signed-apk/${{ inputs.filename }}-${{ matrix.job.arch }}.apk" ${{ inputs.apiServer }}/api/save_custom_client
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@master
