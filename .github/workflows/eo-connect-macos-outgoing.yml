@@ -1,0 +1,431 @@
+name: EO.Connect macOS Outgoing Client
+run-name: EO.Connect macOS Outgoing Client
+
+on: 
+  workflow_dispatch:
+  schedule:
+    # Run weekly on Sundays at 3:30 AM UTC to get latest RustDesk updates
+    - cron: '30 3 * * 0'
+
+env:
+  SCITER_RUST_VERSION: "1.75"
+  RUST_VERSION: "1.75"
+  MAC_RUST_VERSION: "1.81"
+  FLUTTER_VERSION: "3.24.5"
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
+  VERSION: "1.4.2"
+  UPLOAD_ARTIFACT: 'true'
+  MACOS_P12_BASE64: "${{ secrets.MACOS_P12_BASE64 }}"
+
+jobs:
+  generate-bridge:
+    uses: ./.github/workflows/bridge.yml
+    with:
+      version: "1.4.2"
+
+  build-eo-connect-macos-outgoing:
+    name: Build EO.Connect macOS Outgoing
+    needs: [generate-bridge]
+    runs-on: ${{ matrix.job.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - {
+              target: x86_64-apple-darwin,
+              os: macos-13,
+              arch: x86_64,
+              vcpkg-triplet: x64-osx,
+            }
+          - {
+              target: aarch64-apple-darwin,
+              os: macos-14,
+              arch: aarch64,
+              vcpkg-triplet: arm64-osx,
+            }
+    
+    steps:
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@v6
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: Checkout RustDesk source code
+        uses: actions/checkout@v4
+        with:
+          repository: rustdesk/rustdesk
+          submodules: recursive
+
+      - name: Checkout rdgen repository for resources
+        uses: actions/checkout@v4
+        with:
+          path: ./rdgen-resources
+
+      - name: Install build tools
+        shell: bash
+        run: |
+          brew install imagemagick potrace nasm cmake gcc wget ninja llvm create-dmg
+          echo "$(brew --prefix imagemagick)/bin" >> $GITHUB_PATH
+
+      - name: Configure EO.Connect Outgoing Client
+        continue-on-error: false
+        shell: bash
+        run: |
+          # Set server configuration
+          sed -i '' -e 's|rs-ny.rustdesk.com|connect.enterpriseopen.com|' ./libs/hbb_common/src/config.rs
+          sed -i '' -e 's|OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw=|your_public_key_here|' ./libs/hbb_common/src/config.rs
+          sed -i '' -e 's|https://admin.rustdesk.com|https://api.enterpriseopen.com|' ./src/common.rs
+
+          # Configure macOS app branding for Admin client
+          cp ./flutter/macos/Runner/Info.plist ./flutter/macos/Runner/Info.plist.bak
+          cp ./flutter/macos/Runner/Configs/AppInfo.xcconfig ./flutter/macos/Runner/Configs/AppInfo.xcconfig.bak
+          
+          sed -i '' -e 's|<key>CFBundleName</key>.*<string>.*</string>|<key>CFBundleName</key>\n\t<string>EO.Connect-Admin</string>|' ./flutter/macos/Runner/Info.plist
+          sed -i '' -e 's|<key>CFBundleDisplayName</key>.*<string>.*</string>|<key>CFBundleDisplayName</key>\n\t<string>EO.Connect-Admin</string>|' ./flutter/macos/Runner/Info.plist
+          sed -i '' -e 's|<key>CFBundleIdentifier</key>.*<string>.*</string>|<key>CFBundleIdentifier</key>\n\t<string>com.EO.Connect-Admin.app</string>|' ./flutter/macos/Runner/Info.plist
+          
+          sed -i '' -e 's|PRODUCT_NAME = .*|PRODUCT_NAME = EO.Connect-Admin|' ./flutter/macos/Runner/Configs/AppInfo.xcconfig
+          sed -i '' -e 's|PRODUCT_BUNDLE_IDENTIFIER = .*|PRODUCT_BUNDLE_IDENTIFIER = com.EO.Connect-Admin.app|' ./flutter/macos/Runner/Configs/AppInfo.xcconfig
+          sed -i '' -e 's|Purslane Ltd.|Enterprise Open Consortium|' ./flutter/macos/Runner/Configs/AppInfo.xcconfig
+
+          # Update Cargo.toml files
+          sed -i '' -e 's|Purslane Ltd.|Enterprise Open Consortium|' ./Cargo.toml
+          sed -i '' -e 's|Purslane Ltd|Enterprise Open Consortium|' ./libs/portable/Cargo.toml
+          
+          # Update Xcode project settings
+          sed -i '' -e 's/PRODUCT_NAME = "RustDesk"/PRODUCT_NAME = "EO.Connect-Admin"/' ./flutter/macos/Runner.xcodeproj/project.pbxproj
+          sed -i '' -e 's/PRODUCT_BUNDLE_IDENTIFIER = ".*"/PRODUCT_BUNDLE_IDENTIFIER = "com.EO.Connect-Admin.app"/' ./flutter/macos/Runner.xcodeproj/project.pbxproj
+
+          # Update language files
+          cp ./src/lang/en.rs ./src/lang/en.rs.bak
+          find ./src/lang -name "*.rs" -exec sed -i '' -e 's|RustDesk|EO.Connect-Admin|' {} \;
+           
+          # Configure URLs
+          sed -i '' -e 's|https://rustdesk.com|https://enterpriseopen.com/workspace/contact/|' ./build.py
+          sed -i '' -e "s|launchUrl(Uri.parse('https://rustdesk.com'));|launchUrl(Uri.parse('https://enterpriseopen.com/workspace/contact/'));|" ./flutter/lib/common.dart
+          sed -i '' -e "s|launchUrlString('https://rustdesk.com');|launchUrlString('https://enterpriseopen.com/workspace/contact/');|" ./flutter/lib/desktop/pages/desktop_setting_page.dart
+          sed -i '' -e "s|launchUrlString('https://rustdesk.com/privacy.html')|launchUrlString('https://enterpriseopen.com/workspace/contact/privacy.html')|" ./flutter/lib/desktop/pages/desktop_setting_page.dart
+          sed -i '' -e "s|const url = 'https://rustdesk.com/';|const url = 'https://enterpriseopen.com/workspace/contact/';|" ./flutter/lib/mobile/pages/settings_page.dart
+          sed -i '' -e "s|launchUrlString('https://rustdesk.com/privacy.html')|launchUrlString('https://enterpriseopen.com/workspace/contact/privacy.html')|" ./flutter/lib/mobile/pages/settings_page.dart
+          sed -i '' -e "s|https://rustdesk.com/privacy.html|https://enterpriseopen.com/workspace/contact/privacy.html|" ./flutter/lib/desktop/pages/install_page.dart
+
+      - name: Apply EO.Connect patches
+        continue-on-error: true
+        run: |
+          wget https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/allowCustom.diff
+          git apply allowCustom.diff
+          wget https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/removeSetupServerTip.diff
+          git apply removeSetupServerTip.diff
+
+      - name: Configure connection delay fix
+        continue-on-error: false
+        shell: bash
+        run: |
+          sed -i '' -e 's|!key.is_empty()|false|' ./src/client.rs
+
+      - name: Remove new version notifications
+        run: | 
+          sed -i '' -e 's|updateUrl.isNotEmpty|false|' ./flutter/lib/desktop/pages/desktop_home_page.dart
+          sed -i '' '/let (request, url) =/,/Ok(())/{/Ok(())/!d}' ./src/common.rs
+
+      - name: Install flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Patch flutter
+        continue-on-error: true
+        run: |
+            cd $(dirname $(dirname $(which flutter)))
+            [[ "3.24.5" == ${{env.FLUTTER_VERSION}} ]] && git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+      
+      - name: Workaround for flutter issue
+        shell: bash
+        run: |
+          cd "$(dirname "$(which flutter)")"
+          sed -i '' -e 's/_setFramesEnabledState(false);/\/\/_setFramesEnabledState(false);/g' ../packages/flutter/lib/src/scheduler/binding.dart
+        
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+            toolchain: ${{ env.MAC_RUST_VERSION }}
+            targets: ${{ matrix.job.target }}
+            components: "rustfmt"
+  
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: ${{ matrix.job.os }}
+
+      - name: Setup EO.Connect icons for macOS
+        continue-on-error: false
+        shell: bash
+        run: |
+          # Create all necessary directories first
+          mkdir -p ./res
+          mkdir -p ./flutter/assets
+          mkdir -p ./flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset
+          mkdir -p ./macos/Runner/Assets.xcassets/AppIcon.appiconset
+          mkdir -p ./rustdesk/data/flutter_assets/assets
+
+          # Copy icon from local util/ directory
+          cp ./rdgen-resources/util/icon.png ./res/icon.png
+            
+          # Backup existing files (if they exist)
+          [ -f "./res/32x32.png" ] && mv ./res/32x32.png ./res/32x32.png.bak
+          [ -f "./res/64x64.png" ] && mv ./res/64x64.png ./res/64x64.png.bak
+          [ -f "./res/128x128.png" ] && mv ./res/128x128.png ./res/128x128.png.bak
+          [ -f "./res/mac-icon.png" ] && mv ./res/mac-icon.png ./res/mac-icon.png.bak
+          [ -f "./flutter/assets/icon.png" ] && mv ./flutter/assets/icon.png ./flutter/assets/icon.png.bak
+          [ -f "./flutter/assets/icon.svg" ] && mv ./flutter/assets/icon.svg ./flutter/assets/icon.svg.bak
+          [ -f "./rustdesk/data/flutter_assets/assets/icon.svg" ] && mv ./rustdesk/data/flutter_assets/assets/icon.svg ./rustdesk/data/flutter_assets/assets/icon.svg.bak
+            
+          # Create standard app icons
+          magick ./res/icon.png -resize 32x32 ./res/32x32.png
+          magick ./res/icon.png -resize 64x64 ./res/64x64.png
+          magick ./res/icon.png -resize 128x128 ./res/128x128.png
+          
+          # Copy icon to Flutter assets
+          cp ./res/icon.png ./flutter/assets/icon.png
+          cp ./res/icon.png ./rustdesk/data/flutter_assets/assets/icon.png
+          
+          # Convert PNG to SVG using potrace
+          magick ./res/icon.png -flatten ./temp_icon.pbm
+          potrace --svg -o ./flutter/assets/icon.svg ./temp_icon.pbm
+          cp ./flutter/assets/icon.svg ./rustdesk/data/flutter_assets/assets/icon.svg
+          rm ./temp_icon.pbm
+          
+          # Create macOS app icons
+          magick ./res/icon.png -resize 16x16 "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_16.png"
+          magick ./res/icon.png -resize 32x32 "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_32.png"
+          magick ./res/icon.png -resize 64x64 "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_64.png"
+          magick ./res/icon.png -resize 128x128 "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_128.png"
+          magick ./res/icon.png -resize 256x256 "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_256.png"
+          magick ./res/icon.png -resize 512x512 "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_512.png"
+          magick ./res/icon.png -resize 1024x1024 "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_1024.png"
+
+          # Create macOS specific icons
+          magick ./res/icon.png -resize 128x128 ./res/mac-icon.png
+          
+          # Create AppIcon.icns (macOS native icon format)
+          mkdir -p ./iconset.iconset
+          cp "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_16.png" "./iconset.iconset/icon_16x16.png"
+          cp "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_32.png" "./iconset.iconset/icon_16x16@2x.png"
+          cp "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_32.png" "./iconset.iconset/icon_32x32.png"
+          cp "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_64.png" "./iconset.iconset/icon_32x32@2x.png"
+          cp "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_128.png" "./iconset.iconset/icon_128x128.png"
+          cp "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_256.png" "./iconset.iconset/icon_128x128@2x.png"
+          cp "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_256.png" "./iconset.iconset/icon_256x256.png"
+          cp "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_512.png" "./iconset.iconset/icon_256x256@2x.png"
+          cp "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_512.png" "./iconset.iconset/icon_512x512.png"
+          cp "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_1024.png" "./iconset.iconset/icon_512x512@2x.png"
+          iconutil -c icns ./iconset.iconset -o ./flutter/macos/Runner/AppIcon.icns
+          rm -rf ./iconset.iconset
+          
+          # Create Contents.json for macOS app icon
+          echo '{
+            "images": [
+              {"size":"16x16","idiom":"mac","filename":"app_icon_16.png","scale":"1x"},
+              {"size":"16x16","idiom":"mac","filename":"app_icon_32.png","scale":"2x"},
+              {"size":"32x32","idiom":"mac","filename":"app_icon_32.png","scale":"1x"},
+              {"size":"32x32","idiom":"mac","filename":"app_icon_64.png","scale":"2x"},
+              {"size":"128x128","idiom":"mac","filename":"app_icon_128.png","scale":"1x"},
+              {"size":"128x128","idiom":"mac","filename":"app_icon_256.png","scale":"2x"},
+              {"size":"256x256","idiom":"mac","filename":"app_icon_256.png","scale":"1x"},
+              {"size":"256x256","idiom":"mac","filename":"app_icon_512.png","scale":"2x"},
+              {"size":"512x512","idiom":"mac","filename":"app_icon_512.png","scale":"1x"},
+              {"size":"512x512","idiom":"mac","filename":"app_icon_1024.png","scale":"2x"}
+            ],
+            "info": {
+              "version": 1,
+              "author": "xcode"
+            }
+          }' > "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json"
+          
+          # Copy icons and Contents.json to both locations
+          cp -r flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/* macos/Runner/Assets.xcassets/AppIcon.appiconset/
+
+      - name: Replace flutter icons
+        continue-on-error: false
+        shell: bash
+        run: |
+          cd ./flutter
+          # Create required directories and files
+          mkdir -p web
+          mkdir -p assets
+          echo '{"name":"EO.Connect-Admin","short_name":"EO.Connect-Admin","start_url":"/","display":"standalone","background_color":"#ffffff","theme_color":"#ffffff","description":"A remote desktop software."}' > web/manifest.json
+          echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>EO.Connect-Admin</title></head><body></body></html>' > web/index.html
+          
+          # Ensure the AppIcon.appiconset directory exists
+          mkdir -p macos/Runner/Assets.xcassets/AppIcon.appiconset
+          
+          # Copy the processed icons to Flutter locations
+          cp ../res/mac-icon.png ./assets/icon.png
+          cp ../flutter/assets/icon.svg ./assets/icon.svg || true
+          
+          flutter pub upgrade win32
+          flutter pub get
+          flutter pub run flutter_launcher_icons
+          cd ..
+      
+      - name: Update UI icon
+        continue-on-error: true
+        shell: bash
+        run: |
+          cp ./src/ui.rs ./src/ui.rs.bak
+          if [ -f "./res/icon.png" ]; then
+            SEARCH_STR="iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAACXBIWXMAAEiuAABIrgHwmhA7AAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAEx9JREFUeJztnXmYHMV5h9"
+            b64=$(base64 < ./res/icon.png)
+            sed -i '' -e "s~$SEARCH_STR.*\"~$b64\"~" ./src/ui.rs
+          fi
+
+      - name: Restore bridge files
+        uses: actions/download-artifact@master
+        with:
+          name: bridge-artifact
+          path: ./
+
+      - name: Setup vcpkg with Github Actions binary cache
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Install vcpkg dependencies
+        run: |
+          if ! $VCPKG_ROOT/vcpkg \
+            install \
+            --x-install-root="$VCPKG_ROOT/installed"; then
+            find "${VCPKG_ROOT}/" -name "*.log" | while read -r _1; do
+              echo "$_1:"
+              echo "======"
+              cat "$_1"
+              echo "======"
+              echo ""
+            done
+            exit 1
+          fi
+
+      - name: Create custom.txt configuration
+        run: |
+          echo -n '{"conn-type":"outgoing","disable-installation":"Y","disable-settings":"Y","app-name":"EO.Connect-Admin","override-settings":{},"default-settings":{"access-mode":"custom","enable-keyboard":"Y","enable-clipboard":"Y","enable-file-transfer":"Y","enable-audio":"Y","enable-tunnel":"Y","enable-remote-restart":"Y","enable-record-session":"Y","enable-block-input":"Y","allow-remote-config-modification":"N","direct-server":"N","hide-cm":"N","verification-method":"use-both-passwords","approve-mode":"password-click","theme":"dark"},"enable-lan-discovery":"Y","allow-auto-disconnect":"N","allow-remove-wallpaper":"Y"}' > ./custom.txt
+
+      - name: Build EO.Connect-Admin
+        run: |
+          if [ "${{ matrix.job.target }}" = "aarch64-apple-darwin" ]; then
+            MIN_MACOS_VERSION="12.3"
+            sed -i '' -e "s/MACOSX_DEPLOYMENT_TARGET\=[0-9]*.[0-9]*/MACOSX_DEPLOYMENT_TARGET=${MIN_MACOS_VERSION}/" build.py
+            sed -i '' -e "s/platform :osx, '.*'/platform :osx, '${MIN_MACOS_VERSION}'/" flutter/macos/Podfile
+            sed -i '' -e "s/osx_minimum_system_version = \"[0-9]*.[0-9]*\"/osx_minimum_system_version = \"${MIN_MACOS_VERSION}\"/" Cargo.toml
+            sed -i '' -e "s/MACOSX_DEPLOYMENT_TARGET = [0-9]*.[0-9]*;/MACOSX_DEPLOYMENT_TARGET = ${MIN_MACOS_VERSION};/" flutter/macos/Runner.xcodeproj/project.pbxproj
+          fi
+          sed -i '' -e "s/RustDesk.app/\"EO.Connect-Admin.app\"/" build.py
+          ./build.py --flutter --hwcodec --unix-file-copy-paste
+
+      - name: Install rcodesign tool
+        if: env.MACOS_P12_BASE64 != null
+        shell: bash
+        run: |
+          pushd /tmp
+          wget https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F0.22.0/apple-codesign-0.22.0-macos-universal.tar.gz
+          tar -zxvf apple-codesign-0.22.0-macos-universal.tar.gz
+          mv apple-codesign-0.22.0-macos-universal/rcodesign /usr/local/bin
+          popd
+
+      - name: Setup final icons and logo
+        continue-on-error: false
+        shell: bash
+        run: |
+          ASSETS_DIR="build/macos/Build/Products/Release/RustDesk.app/Contents/Frameworks/App.framework/Versions/Current/Resources/flutter_assets/assets"
+          mkdir -p "$ASSETS_DIR"
+          if [ -f "$ASSETS_DIR/icon.svg" ]; then
+            mv "$ASSETS_DIR/icon.svg" "$ASSETS_DIR/icon.svg.bak"
+          fi
+          # First convert PNG to PBM (bitmap)
+          magick convert ./res/icon.png ./temp_icon.pbm
+          # Then use potrace to convert to SVG
+          potrace --svg -o "$ASSETS_DIR/icon.svg" ./temp_icon.pbm
+          rm ./temp_icon.pbm
+          
+          # Copy logo
+          cp ./rdgen-resources/util/icon.png "$ASSETS_DIR/logo.png"
+
+      - name: Sign macOS app bundle
+        if: env.MACOS_P12_BASE64 != ''
+        run: |
+            cd flutter/build/macos/Build/Products/Release
+            
+            # Rename RustDesk.app to the custom app name first
+            if [ -d "RustDesk.app" ]; then
+              mv "RustDesk.app" "EO.Connect-Admin.app"
+              echo "Renamed RustDesk.app to EO.Connect-Admin.app"
+            fi
+            
+            # Decode the certificate
+            echo "${{ secrets.MACOS_P12_BASE64 }}" | base64 --decode > certificate.p12
+            
+            # Sign the app bundle and its contents
+            if [ -d "EO.Connect-Admin.app/Contents/MacOS" ]; then
+              echo "Signing main executable..."
+              MAIN_EXECUTABLE="EO.Connect-Admin.app/Contents/MacOS/EO.Connect-Admin"
+              if [ -f "$MAIN_EXECUTABLE" ]; then
+                rcodesign sign --p12-file certificate.p12 --p12-password "${{ secrets.MACOS_P12_PASSWORD }}" \
+                  --code-signature-flags runtime "$MAIN_EXECUTABLE"
+              else
+                echo "Main executable not found at expected path: $MAIN_EXECUTABLE"
+                ACTUAL_EXECUTABLE=$(ls "EO.Connect-Admin.app/Contents/MacOS/" | head -n 1)
+                if [ -n "$ACTUAL_EXECUTABLE" ]; then
+                  echo "Found executable: $ACTUAL_EXECUTABLE"
+                  rcodesign sign --p12-file certificate.p12 --p12-password "${{ secrets.MACOS_P12_PASSWORD }}" \
+                    --code-signature-flags runtime "EO.Connect-Admin.app/Contents/MacOS/$ACTUAL_EXECUTABLE"
+                fi
+              fi
+              
+              echo "Signing frameworks..."
+              find "EO.Connect-Admin.app/Contents/Frameworks" -type f -not -name ".*" -exec \
+                rcodesign sign --p12-file certificate.p12 --p12-password "${{ secrets.MACOS_P12_PASSWORD }}" \
+                --code-signature-flags runtime {} \;
+              
+              echo "Signing main bundle..."
+              rcodesign sign --p12-file certificate.p12 --p12-password "${{ secrets.MACOS_P12_PASSWORD }}" \
+                --code-signature-flags runtime "EO.Connect-Admin.app"
+            else
+              echo "Error: Invalid app bundle structure"
+              exit 1
+            fi
+            
+            # Clean up
+            rm certificate.p12 
+
+      - name: Create DMG
+        run: |
+          cd /Users/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/flutter/build/macos/Build/Products/Release
+          # Find the actual .app bundle
+          if [ -d "RustDesk.app" ]; then
+            mv "RustDesk.app" "EO.Connect-Admin.app"
+          fi
+          if [ ! -d "EO.Connect-Admin.app" ]; then
+            echo "Could not find .app bundle!"
+            exit 1
+          fi
+          echo "Creating DMG for EO.Connect-Admin.app"
+          create-dmg \
+            --volname "EO.Connect-Admin" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "EO.Connect-Admin.app" 200 190 \
+            --hide-extension "EO.Connect-Admin.app" \
+            --app-drop-link 600 185 \
+            "EO.Connect-Admin-${{ matrix.job.arch }}.dmg" \
+            "EO.Connect-Admin.app"
+          mv "EO.Connect-Admin-${{ matrix.job.arch }}.dmg" $GITHUB_WORKSPACE/
+  
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@master
+        with:
+          name: EO.Connect-Admin-macOS-Outgoing-${{ matrix.job.arch }}.dmg
+          path: EO.Connect-Admin-${{ matrix.job.arch }}.dmg

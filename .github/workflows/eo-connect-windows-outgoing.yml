@@ -1,11 +1,11 @@
-name: EO.Connect Windows Incoming Client
-run-name: EO.Connect Windows Incoming Client
+name: EO.Connect Windows Outgoing Client
+run-name: EO.Connect Windows Outgoing Client
 
 on: 
   workflow_dispatch:
   schedule:
-    # Run weekly on Sundays at 2 AM UTC to get latest RustDesk updates
-    - cron: '0 2 * * 0'
+    # Run weekly on Sundays at 2:30 AM UTC to get latest RustDesk updates
+    - cron: '30 2 * * 0'
 
 env:
   SCITER_RUST_VERSION: "1.75"
@@ -36,8 +36,8 @@ jobs:
     strategy:
       fail-fast: false
 
-  build-eo-connect-windows-incoming:
-    name: Build EO.Connect Windows Incoming
+  build-eo-connect-windows-outgoing:
+    name: Build EO.Connect Windows Outgoing
     needs: [build-RustDeskTempTopMostWindow, generate-bridge]
     runs-on: windows-2022
     
@@ -76,7 +76,7 @@ jobs:
           choco install -y imagemagick.app --no-progress
           Get-ChildItem -Path "${env:ProgramFiles}" | % { $_.FullName } | Select-String -Pattern "[\/\\]ImageMagick[^\/\\]*$" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
 
-      - name: Configure EO.Connect Incoming Client
+      - name: Configure EO.Connect Outgoing Client
         shell: bash
         run: |
           # Set server configuration
@@ -84,26 +84,26 @@ jobs:
           sed -i -e 's|OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw=|your_public_key_here|' ./libs/hbb_common/src/config.rs
           sed -i -e 's|https://admin.rustdesk.com|https://api.enterpriseopen.com|' ./src/common.rs
 
-          # Configure app name and branding
-          sed -i -e 's|description = "RustDesk Remote Desktop"|description = "EO.Connect"|' ./Cargo.toml
-          sed -i -e 's|ProductName = "RustDesk"|ProductName = "EO.Connect"|' ./Cargo.toml
-          sed -i -e 's|FileDescription = "RustDesk Remote Desktop"|FileDescription = "EO.Connect"|' ./Cargo.toml
-          sed -i -e 's|OriginalFilename = "rustdesk.exe"|OriginalFilename = "EO.Connect.exe"|' ./Cargo.toml
+          # Configure app name and branding for Admin client
+          sed -i -e 's|description = "RustDesk Remote Desktop"|description = "EO.Connect-Admin"|' ./Cargo.toml
+          sed -i -e 's|ProductName = "RustDesk"|ProductName = "EO.Connect-Admin"|' ./Cargo.toml
+          sed -i -e 's|FileDescription = "RustDesk Remote Desktop"|FileDescription = "EO.Connect-Admin"|' ./Cargo.toml
+          sed -i -e 's|OriginalFilename = "rustdesk.exe"|OriginalFilename = "EO.Connect-Admin.exe"|' ./Cargo.toml
           
           # Configure portable version
-          sed -i -e 's|description = "RustDesk Remote Desktop"|description = "EO.Connect"|' ./libs/portable/Cargo.toml
-          sed -i -e 's|ProductName = "RustDesk"|ProductName = "EO.Connect"|' ./libs/portable/Cargo.toml
-          sed -i -e 's|FileDescription = "RustDesk Remote Desktop"|FileDescription = "EO.Connect"|' ./libs/portable/Cargo.toml
-          sed -i -e 's|OriginalFilename = "rustdesk.exe"|OriginalFilename = "EO.Connect.exe"|' ./libs/portable/Cargo.toml
+          sed -i -e 's|description = "RustDesk Remote Desktop"|description = "EO.Connect-Admin"|' ./libs/portable/Cargo.toml
+          sed -i -e 's|ProductName = "RustDesk"|ProductName = "EO.Connect-Admin"|' ./libs/portable/Cargo.toml
+          sed -i -e 's|FileDescription = "RustDesk Remote Desktop"|FileDescription = "EO.Connect-Admin"|' ./libs/portable/Cargo.toml
+          sed -i -e 's|OriginalFilename = "rustdesk.exe"|OriginalFilename = "EO.Connect-Admin.exe"|' ./libs/portable/Cargo.toml
           
           # Configure Flutter app
-          sed -i -e 's|"RustDesk Remote Desktop"|"EO.Connect"|' ./flutter/windows/runner/Runner.rc
-          sed -i -e 's|VALUE "InternalName", "rustdesk" "\0"|VALUE "InternalName", "EO.Connect" "\0"|' ./flutter/windows/runner/Runner.rc
-          sed -i -e 's|"rustdesk.exe"|"EO.Connect.exe"|' ./flutter/windows/runner/Runner.rc
-          sed -i -e 's|"RustDesk"|"EO.Connect"|' ./flutter/windows/runner/Runner.rc
+          sed -i -e 's|"RustDesk Remote Desktop"|"EO.Connect-Admin"|' ./flutter/windows/runner/Runner.rc
+          sed -i -e 's|VALUE "InternalName", "rustdesk" "\0"|VALUE "InternalName", "EO.Connect-Admin" "\0"|' ./flutter/windows/runner/Runner.rc
+          sed -i -e 's|"rustdesk.exe"|"EO.Connect-Admin.exe"|' ./flutter/windows/runner/Runner.rc
+          sed -i -e 's|"RustDesk"|"EO.Connect-Admin"|' ./flutter/windows/runner/Runner.rc
           
           # Update language files
-          find ./src/lang -name "*.rs" -exec sed -i -e 's|RustDesk|EO.Connect|' {} \;
+          find ./src/lang -name "*.rs" -exec sed -i -e 's|RustDesk|EO.Connect-Admin|' {} \;
 
           # Configure company branding
           sed -i -e 's|Purslane Ltd|Enterprise Open Consortium|' ./flutter/lib/desktop/pages/desktop_setting_page.dart
@@ -127,12 +127,6 @@ jobs:
           git apply allowCustom.diff
           Invoke-WebRequest -Uri https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/removeSetupServerTip.diff -OutFile removeSetupServerTip.diff
           git apply removeSetupServerTip.diff
-
-      - name: Enable Connection Manager (Incoming Support)
-        continue-on-error: true
-        run: |
-          Invoke-WebRequest -Uri https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/hidecm.diff -OutFile hidecm.diff
-          git apply hidecm.diff
 
       - name: Configure connection delay fix
         shell: bash
@@ -243,7 +237,7 @@ jobs:
           flutter pub run flutter_launcher_icons
           cd ..
 
-      - name: Build EO.Connect
+      - name: Build EO.Connect-Admin
         run: |
           python3 .\build.py --portable --hwcodec --flutter --vram --skip-portable-pack
           mv ./flutter/build/windows/x64/runner/Release ./rustdesk
@@ -320,19 +314,19 @@ jobs:
       - name: Create EO.Connect configuration
         shell: bash
         run: |
-          echo -n '{"conn-type":"incoming","disable-installation":"Y","disable-settings":"Y","app-name":"EO.Connect","override-settings":{},"default-settings":{"access-mode":"custom","enable-keyboard":"Y","enable-clipboard":"Y","enable-file-transfer":"Y","enable-audio":"Y","enable-tunnel":"Y","enable-remote-restart":"Y","enable-record-session":"Y","enable-block-input":"Y","allow-remote-config-modification":"N","direct-server":"N","hide-cm":"N","verification-method":"use-both-passwords","approve-mode":"password-click","theme":"dark"},"enable-lan-discovery":"Y","allow-auto-disconnect":"N","allow-remove-wallpaper":"Y"}' > ./rustdesk/custom.txt
+          echo -n '{"conn-type":"outgoing","disable-installation":"Y","disable-settings":"Y","app-name":"EO.Connect-Admin","override-settings":{},"default-settings":{"access-mode":"custom","enable-keyboard":"Y","enable-clipboard":"Y","enable-file-transfer":"Y","enable-audio":"Y","enable-tunnel":"Y","enable-remote-restart":"Y","enable-record-session":"Y","enable-block-input":"Y","allow-remote-config-modification":"N","direct-server":"N","hide-cm":"N","verification-method":"use-both-passwords","approve-mode":"password-click","theme":"dark"},"enable-lan-discovery":"Y","allow-auto-disconnect":"N","allow-remove-wallpaper":"Y"}' > ./rustdesk/custom.txt
 
       - name: Build portable executable
         shell: bash
         run: |
-          mv "./rustdesk/rustdesk.exe" "./rustdesk/EO.Connect.exe" || echo "rustdesk.exe not found"
+          mv "./rustdesk/rustdesk.exe" "./rustdesk/EO.Connect-Admin.exe" || echo "rustdesk.exe not found"
           sed -i '/dpiAware/d' res/manifest.xml
           pushd ./libs/portable
           pip3 install -r requirements.txt
-          python3 ./generate.py -f ../../rustdesk/ -o . -e "../../rustdesk/EO.Connect.exe"
+          python3 ./generate.py -f ../../rustdesk/ -o . -e "../../rustdesk/EO.Connect-Admin.exe"
           popd
           mkdir -p ./SignOutput
-          mv ./target/release/rustdesk-portable-packer.exe "./SignOutput/EO.Connect.exe"
+          mv ./target/release/rustdesk-portable-packer.exe "./SignOutput/EO.Connect-Admin.exe"
 
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
@@ -340,12 +334,12 @@ jobs:
       - name: Build MSI installer
         continue-on-error: true
         run: |
-          cp "rustdesk/EO.Connect.exe" "rustdesk/EO_Connect.exe" -ErrorAction SilentlyContinue
+          cp "rustdesk/EO.Connect-Admin.exe" "rustdesk/EO_Connect-Admin.exe" -ErrorAction SilentlyContinue
           pushd ./res/msi
-          python preprocess.py --app-name "EO_Connect" --arp -d ../../rustdesk
+          python preprocess.py --app-name "EO_Connect-Admin" --arp -d ../../rustdesk
           nuget restore msi.sln
           msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
-          cp ./Package/bin/x64/Release/en-us/Package.msi ../../SignOutput/EO.Connect.msi
+          cp ./Package/bin/x64/Release/en-us/Package.msi ../../SignOutput/EO.Connect-Admin.msi
           popd
 
       - name: Sign final executables
@@ -376,14 +370,14 @@ jobs:
           Remove-Item ./SignOutput/unsigned_files.zip
           Remove-Item ./SignOutput/signed_files.zip
 
-      - name: Upload EO.Connect EXE
+      - name: Upload EO.Connect-Admin EXE
         uses: actions/upload-artifact@master
         with:
-          name: EO.Connect-Windows-Incoming-x64.exe
-          path: ./SignOutput/EO.Connect.exe
+          name: EO.Connect-Admin-Windows-Outgoing-x64.exe
+          path: ./SignOutput/EO.Connect-Admin.exe
 
-      - name: Upload EO.Connect MSI
+      - name: Upload EO.Connect-Admin MSI
         uses: actions/upload-artifact@master
         with:
-          name: EO.Connect-Windows-Incoming-x64.msi
-          path: ./SignOutput/EO.Connect.msi
+          name: EO.Connect-Admin-Windows-Outgoing-x64.msi
+          path: ./SignOutput/EO.Connect-Admin.msi
