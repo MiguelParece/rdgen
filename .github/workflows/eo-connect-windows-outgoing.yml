@@ -383,7 +383,7 @@ jobs:
           </Wix>
           '@
           Set-Content -Path 'ProtocolHandler.wxs' -Value $wxs -Encoding UTF8
-          $wixProj = (Get-ChildItem -Filter *.wixproj | Select-Object -First 1).FullName
+          $wixProj = (Get-ChildItem -Recurse -Filter *.wixproj | Select-Object -First 1).FullName
           if (-not $wixProj) { throw 'No .wixproj found after preprocess.' }
           if (-not (Select-String -Path $wixProj -Pattern 'ProtocolHandler.wxs' -Quiet)) {
             $proj = Get-Content $wixProj; $inserted = $false; $out = @()
