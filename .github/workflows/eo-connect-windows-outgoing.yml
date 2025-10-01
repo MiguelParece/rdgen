@@ -333,37 +333,39 @@ jobs:
         uses: microsoft/setup-msbuild@v2
 
       - name: Add Protocol Handler Registration
-        continue-on-error: true
+        continue-on-error: false
         shell: bash
         run: |
           cp ./rdgen-resources/util/handler_files/windows/protocol_handler.reg ./rustdesk/          
           echo "Protocol handler files copied to installation directory"
 
       - name: Add portable helper to install protocol handler
-        continue-on-error: true
+        continue-on-error: false
         shell: pwsh
         run: |
           Set-Content -Path "rustdesk/install-protocol-handler.cmd" -Value "@echo off`r`nreg import protocol_handler.reg`r`necho Installed EO.Connect protocol handler.`r`npause" -Encoding ASCII
           Set-Content -Path "rustdesk/README-ProtocolHandler.txt" -Value "If running the portable app, double-click install-protocol-handler.cmd as Administrator to register the 'eoconnect:' URL protocol." -Encoding UTF8
 
       - name: Add protocol handler WiX fragment (MSI)
-        continue-on-error: true
+        continue-on-error: false
         shell: pwsh
         run: |
           $wxs = @"
           <?xml version="1.0" encoding="UTF-8"?>
           <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
             <Fragment>
-              <ComponentGroup Id="ProtocolComponents" />
-            </Fragment>
-            <Fragment>
-              <DirectoryRef Id="ProgramFilesFolder">
+              <DirectoryRef Id="INSTALLDIR">
                 <Component Id="EOC_Protocol" Guid="*">
-                  <RegistryValue Root="HKCR" Key="eoconnect" Value="URL:EO.Connect Protocol" Type="string" Action="write" />
+                  <RegistryValue Root="HKCR" Key="eoconnect" Value="URL:EO.Connect Protocol" Type="string" Action="write" KeyPath="yes" />
                   <RegistryValue Root="HKCR" Key="eoconnect" Name="URL Protocol" Value="" Type="string" Action="write" />
-                  <RegistryValue Root="HKCR" Key="eoconnect\\shell\\open\\command" Value="[ProgramFilesFolder]EO.Connect-Admin\\EO.Connect-Admin.exe \"%1\"" Type="string" Action="write" />
+                  <RegistryValue Root="HKCR" Key="eoconnect\\shell\\open\\command" Value="[INSTALLDIR]EO.Connect-Admin.exe \"%1\"" Type="string" Action="write" />
                 </Component>
               </DirectoryRef>
+            </Fragment>
+            <Fragment>
+              <ComponentGroup Id="ProtocolComponents">
+                <ComponentRef Id="EOC_Protocol" />
+              </ComponentGroup>
             </Fragment>
           </Wix>
           "@
@@ -382,9 +384,19 @@ jobs:
             }
             Set-Content "res/msi/msi.wixproj" ($proj -join "`n") -Encoding UTF8
           }
+          # Ensure Product Feature references our ComponentGroup
+          $productPath = "res/msi/Product.wxs"
+          if (Test-Path $productPath) {
+            $content = Get-Content $productPath -Raw
+            if ($content -notmatch '<ComponentGroupRef\s+Id="ProtocolComponents"\s*/>') {
+              # Insert ComponentGroupRef inside the main ProductFeature (assumes Id="ProductFeature")
+              $content = $content -replace '(<Feature[^>]*Id="ProductFeature"[\s\S]*?>)', '$1`n      <ComponentGroupRef Id="ProtocolComponents" />'
+              Set-Content $productPath $content -Encoding UTF8
+            }
+          }
 
       - name: Build MSI installer
-        continue-on-error: true
+        continue-on-error: false
         run: |
           cp "rustdesk/EO.Connect-Admin.exe" "rustdesk/EO_Connect-Admin.exe" -ErrorAction SilentlyContinue
           pushd ./res/msi
