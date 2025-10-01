@@ -334,10 +334,20 @@ jobs:
 
       - name: Add Protocol Handler Registration
         continue-on-error: false
-        shell: bash
+        shell: pwsh
         run: |
-          cp ./rdgen-resources/util/handler_files/windows/protocol_handler.reg ./rustdesk/          
-          echo "Protocol handler files copied to installation directory"
+          $reg = @"
+          Windows Registry Editor Version 5.00
+
+          [HKEY_CLASSES_ROOT\\eoconnect]
+          @="URL:EO.Connect Protocol"
+          "URL Protocol"=""
+
+          [HKEY_CLASSES_ROOT\\eoconnect\\shell\\open\\command]
+          @="\"%ProgramFiles%\\EO.Connect-Admin\\EO.Connect-Admin.exe\" \"%1\""
+          "@
+          Set-Content -Path "rustdesk/protocol_handler.reg" -Value $reg -Encoding Unicode
+          Write-Host "Protocol handler .reg file created in rustdesk/"
 
       - name: Add portable helper to install protocol handler
         continue-on-error: false
