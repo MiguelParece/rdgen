@@ -356,11 +356,14 @@ jobs:
           Set-Content -Path "rustdesk/install-protocol-handler.cmd" -Value "@echo off`r`nreg import protocol_handler.reg`r`necho Installed EO.Connect protocol handler.`r`npause" -Encoding ASCII
           Set-Content -Path "rustdesk/README-ProtocolHandler.txt" -Value "If running the portable app, double-click install-protocol-handler.cmd as Administrator to register the 'eoconnect:' URL protocol." -Encoding UTF8
 
-      - name: Add protocol handler WiX fragment (MSI)
+      - name: Build MSI installer
         continue-on-error: false
-        shell: pwsh
         run: |
-          $wxs = @"
+          cp "rustdesk/EO.Connect-Admin.exe" "rustdesk/EO_Connect-Admin.exe" -ErrorAction SilentlyContinue
+          pushd ./res/msi
+          python preprocess.py --app-name "EO_Connect-Admin" --arp -d ../../rustdesk
+          # Inject WiX protocol handler after preprocess, before msbuild
+          $wxs = @'
           <?xml version="1.0" encoding="UTF-8"?>
           <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
             <Fragment>
@@ -368,7 +371,7 @@ jobs:
                 <Component Id="EOC_Protocol" Guid="*">
                   <RegistryValue Root="HKCR" Key="eoconnect" Value="URL:EO.Connect Protocol" Type="string" Action="write" KeyPath="yes" />
                   <RegistryValue Root="HKCR" Key="eoconnect" Name="URL Protocol" Value="" Type="string" Action="write" />
-                  <RegistryValue Root="HKCR" Key="eoconnect\\shell\\open\\command" Value="[INSTALLDIR]EO.Connect-Admin.exe \"%1\"" Type="string" Action="write" />
+                  <RegistryValue Root="HKCR" Key="eoconnect\shell\open\command" Value="[INSTALLDIR]EO.Connect-Admin.exe \"%1\"" Type="string" Action="write" />
                 </Component>
               </DirectoryRef>
             </Fragment>
@@ -378,39 +381,23 @@ jobs:
               </ComponentGroup>
             </Fragment>
           </Wix>
-          "@
-          Set-Content -Path "res/msi/ProtocolHandler.wxs" -Value $wxs -Encoding UTF8
-          # Ensure the .wixproj includes our fragment
-          (Get-Content "res/msi/msi.wixproj") | ForEach-Object {
-            $_
-          } | Set-Content "res/msi/msi.wixproj"
-          if (-not (Select-String -Path "res/msi/msi.wixproj" -Pattern "ProtocolHandler.wxs" -Quiet)) {
-            $proj = Get-Content "res/msi/msi.wixproj"
-            $idx = ($proj | Select-String -Pattern '<ItemGroup>' -SimpleMatch | Select-Object -First 1).LineNumber - 1
-            if ($idx -ge 0) {
-              $proj = $proj[0..$idx] + '    <Compile Include="ProtocolHandler.wxs" />' + $proj[$idx+1..($proj.Length-1)]
-            } else {
-              $proj += '  <ItemGroup>\n    <Compile Include="ProtocolHandler.wxs" />\n  </ItemGroup>'
-            }
-            Set-Content "res/msi/msi.wixproj" ($proj -join "`n") -Encoding UTF8
+          '@
+          Set-Content -Path 'ProtocolHandler.wxs' -Value $wxs -Encoding UTF8
+          $wixProj = (Get-ChildItem -Filter *.wixproj | Select-Object -First 1).FullName
+          if (-not $wixProj) { throw 'No .wixproj found after preprocess.' }
+          if (-not (Select-String -Path $wixProj -Pattern 'ProtocolHandler.wxs' -Quiet)) {
+            $proj = Get-Content $wixProj; $inserted = $false; $out = @()
+            foreach ($line in $proj) { $out += $line; if (-not $inserted -and $line -match '<ItemGroup>') { $out += '    <Compile Include="ProtocolHandler.wxs" />'; $inserted = $true } }
+            if (-not $inserted) { $out += '  <ItemGroup>'; $out += '    <Compile Include="ProtocolHandler.wxs" />'; $out += '  </ItemGroup>' }
+            Set-Content $wixProj ($out -join "`n") -Encoding UTF8
           }
-          # Ensure Product Feature references our ComponentGroup
-          $productPath = "res/msi/Product.wxs"
-          if (Test-Path $productPath) {
-            $content = Get-Content $productPath -Raw
-            if ($content -notmatch '<ComponentGroupRef\s+Id="ProtocolComponents"\s*/>') {
-              # Insert ComponentGroupRef inside the main ProductFeature (assumes Id="ProductFeature")
-              $content = $content -replace '(<Feature[^>]*Id="ProductFeature"[\s\S]*?>)', '$1`n      <ComponentGroupRef Id="ProtocolComponents" />'
-              Set-Content $productPath $content -Encoding UTF8
-            }
+          $productWxs = (Get-ChildItem -Filter *.wxs | Select-Object -Expand FullName) | Where-Object { Select-String -Path $_ -Pattern 'Feature[^>]*Id="ProductFeature"' -Quiet } | Select-Object -First 1
+          if (-not $productWxs) { throw 'ProductFeature not found in .wxs files.' }
+          $content = Get-Content $productWxs -Raw
+          if ($content -notmatch '<ComponentGroupRef\s+Id="ProtocolComponents"\s*/>') {
+            $content = $content -replace '(<Feature[^>]*Id="ProductFeature"[\s\S]*?>)', '$1`n      <ComponentGroupRef Id="ProtocolComponents" />'
+            Set-Content $productWxs $content -Encoding UTF8
           }
-
-      - name: Build MSI installer
-        continue-on-error: false
-        run: |
-          cp "rustdesk/EO.Connect-Admin.exe" "rustdesk/EO_Connect-Admin.exe" -ErrorAction SilentlyContinue
-          pushd ./res/msi
-          python preprocess.py --app-name "EO_Connect-Admin" --arp -d ../../rustdesk
           nuget restore msi.sln
           msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
           cp ./Package/bin/x64/Release/en-us/Package.msi ../../SignOutput/EO.Connect-Admin.msi
