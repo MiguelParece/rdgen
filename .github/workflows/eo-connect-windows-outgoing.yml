@@ -208,7 +208,6 @@ jobs:
           mv ./res/icon.ico ./res/icon.ico.bak
           mv ./res/icon.png ./res/icon.png.bak
           mv ./res/tray-icon.ico ./res/tray-icon.ico.bak
-          cp ./rdgen-resources/util/icon.png ./res/icon.png
           mv ./res/32x32.png ./res/32x32.png.bak
           mv ./res/64x64.png ./res/64x64.png.bak
           mv ./res/128x128.png ./res/128x128.png.bak
@@ -314,7 +313,8 @@ jobs:
       - name: Create EO.Connect configuration
         shell: bash
         run: |
-          echo -n '{"conn-type":"outgoing","disable-installation":"Y","disable-settings":"Y","app-name":"EO.Connect-Admin","override-settings":{},"default-settings":{"access-mode":"custom","enable-keyboard":"Y","enable-clipboard":"Y","enable-file-transfer":"Y","enable-audio":"Y","enable-tunnel":"Y","enable-remote-restart":"Y","enable-record-session":"Y","enable-block-input":"Y","allow-remote-config-modification":"N","direct-server":"N","hide-cm":"N","verification-method":"use-both-passwords","approve-mode":"password-click","theme":"dark"},"enable-lan-discovery":"Y","allow-auto-disconnect":"N","allow-remove-wallpaper":"Y"}' > ./rustdesk/custom.txt
+          CUSTOM_JSON='{"conn-type":"outgoing","disable-installation":"N","disable-settings":"Y","app-name":"EO.Connect-Admin","override-settings":{},"default-settings":{"access-mode":"custom","enable-keyboard":"Y","enable-clipboard":"Y","enable-file-transfer":"Y","enable-audio":"Y","enable-tunnel":"Y","enable-remote-restart":"Y","enable-record-session":"Y","enable-block-input":"Y","allow-remote-config-modification":"N","direct-server":"N","hide-cm":"N","verification-method":"use-both-passwords","approve-mode":"password-click","theme":"dark"},"enable-lan-discovery":"Y","allow-auto-disconnect":"N","allow-remove-wallpaper":"Y"}'
+          echo -n "$CUSTOM_JSON" | base64 -w 0 > ./rustdesk/custom.txt
 
       - name: Build portable executable
         shell: bash
@@ -331,6 +331,57 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
+      - name: Add Protocol Handler Registration
+        continue-on-error: true
+        shell: bash
+        run: |
+          cp ./rdgen-resources/util/handler_files/windows/protocol_handler.reg ./rustdesk/          
+          echo "Protocol handler files copied to installation directory"
+
+      - name: Add portable helper to install protocol handler
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Set-Content -Path "rustdesk/install-protocol-handler.cmd" -Value "@echo off`r`nreg import protocol_handler.reg`r`necho Installed EO.Connect protocol handler.`r`npause" -Encoding ASCII
+          Set-Content -Path "rustdesk/README-ProtocolHandler.txt" -Value "If running the portable app, double-click install-protocol-handler.cmd as Administrator to register the 'eoconnect:' URL protocol." -Encoding UTF8
+
+      - name: Add protocol handler WiX fragment (MSI)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $wxs = @"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+            <Fragment>
+              <ComponentGroup Id="ProtocolComponents" />
+            </Fragment>
+            <Fragment>
+              <DirectoryRef Id="ProgramFilesFolder">
+                <Component Id="EOC_Protocol" Guid="*">
+                  <RegistryValue Root="HKCR" Key="eoconnect" Value="URL:EO.Connect Protocol" Type="string" Action="write" />
+                  <RegistryValue Root="HKCR" Key="eoconnect" Name="URL Protocol" Value="" Type="string" Action="write" />
+                  <RegistryValue Root="HKCR" Key="eoconnect\\shell\\open\\command" Value="[ProgramFilesFolder]EO.Connect-Admin\\EO.Connect-Admin.exe \"%1\"" Type="string" Action="write" />
+                </Component>
+              </DirectoryRef>
+            </Fragment>
+          </Wix>
+          "@
+          Set-Content -Path "res/msi/ProtocolHandler.wxs" -Value $wxs -Encoding UTF8
+          # Ensure the .wixproj includes our fragment
+          (Get-Content "res/msi/msi.wixproj") | ForEach-Object {
+            $_
+          } | Set-Content "res/msi/msi.wixproj"
+          if (-not (Select-String -Path "res/msi/msi.wixproj" -Pattern "ProtocolHandler.wxs" -Quiet)) {
+            $proj = Get-Content "res/msi/msi.wixproj"
+            $idx = ($proj | Select-String -Pattern '<ItemGroup>' -SimpleMatch | Select-Object -First 1).LineNumber - 1
+            if ($idx -ge 0) {
+              $proj = $proj[0..$idx] + '    <Compile Include="ProtocolHandler.wxs" />' + $proj[$idx+1..($proj.Length-1)]
+            } else {
+              $proj += '  <ItemGroup>\n    <Compile Include="ProtocolHandler.wxs" />\n  </ItemGroup>'
+            }
+            Set-Content "res/msi/msi.wixproj" ($proj -join "`n") -Encoding UTF8
+          }
+
       - name: Build MSI installer
         continue-on-error: true
         run: |
@@ -341,7 +392,6 @@ jobs:
           msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
           cp ./Package/bin/x64/Release/en-us/Package.msi ../../SignOutput/EO.Connect-Admin.msi
           popd
-
       - name: Sign final executables
         continue-on-error: true
         shell: pwsh
