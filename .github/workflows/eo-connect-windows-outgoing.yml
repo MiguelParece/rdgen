@@ -385,18 +385,27 @@ jobs:
           Set-Content -Path 'ProtocolHandler.wxs' -Value $wxs -Encoding UTF8
           $wixProj = (Get-ChildItem -Recurse -Filter *.wixproj | Select-Object -First 1).FullName
           if (-not $wixProj) { throw 'No .wixproj found after preprocess.' }
+          Write-Host "Using WiX project: $wixProj"
+          $wixProjDir = Split-Path -Parent $wixProj
+          echo "WIX_PROJ_DIR=$wixProjDir" >> $Env:GITHUB_ENV
           if (-not (Select-String -Path $wixProj -Pattern 'ProtocolHandler.wxs' -Quiet)) {
             $proj = Get-Content $wixProj; $inserted = $false; $out = @()
             foreach ($line in $proj) { $out += $line; if (-not $inserted -and $line -match '<ItemGroup>') { $out += '    <Compile Include="ProtocolHandler.wxs" />'; $inserted = $true } }
             if (-not $inserted) { $out += '  <ItemGroup>'; $out += '    <Compile Include="ProtocolHandler.wxs" />'; $out += '  </ItemGroup>' }
             Set-Content $wixProj ($out -join "`n") -Encoding UTF8
           }
-          $productWxs = (Get-ChildItem -Filter *.wxs | Select-Object -Expand FullName) | Where-Object { Select-String -Path $_ -Pattern 'Feature[^>]*Id="ProductFeature"' -Quiet } | Select-Object -First 1
-          if (-not $productWxs) { throw 'ProductFeature not found in .wxs files.' }
-          $content = Get-Content $productWxs -Raw
-          if ($content -notmatch '<ComponentGroupRef\s+Id="ProtocolComponents"\s*/>') {
-            $content = $content -replace '(<Feature[^>]*Id="ProductFeature"[\s\S]*?>)', '$1`n      <ComponentGroupRef Id="ProtocolComponents" />'
-            Set-Content $productWxs $content -Encoding UTF8
+          # Find a ComponentGroup that is already referenced by any Feature and inject our ComponentRef there
+          $wxsFiles = Get-ChildItem -Recurse -Filter *.wxs | Select-Object -Expand FullName
+          $groupRefMatch = Select-String -Path $wxsFiles -Pattern '<ComponentGroupRef\s+Id="([^"]+)"\s*/>' -AllMatches | Select-Object -First 1
+          if (-not $groupRefMatch) { throw 'No ComponentGroupRef found in WiX sources to attach protocol component.' }
+          $groupId = $groupRefMatch.Matches[0].Groups[1].Value
+          Write-Host "Injecting into ComponentGroup Id=$groupId"
+          $groupDefFile = (Select-String -Path $wxsFiles -Pattern "<ComponentGroup\\s+Id=\"$groupId\"" -List | Select-Object -First 1).Path
+          if (-not $groupDefFile) { throw "ComponentGroup definition for '$groupId' not found." }
+          $gcontent = Get-Content $groupDefFile -Raw
+          if ($gcontent -notmatch '<ComponentRef\s+Id="EOC_Protocol"\s*/>') {
+            $gcontent = $gcontent -replace "(<ComponentGroup[^>]*Id=\"$groupId\"[\s\S]*?>)", '$1`n    <ComponentRef Id="EOC_Protocol" />'
+            Set-Content $groupDefFile $gcontent -Encoding UTF8
           }
           nuget restore msi.sln
           msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
