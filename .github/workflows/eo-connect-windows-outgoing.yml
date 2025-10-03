@@ -332,30 +332,6 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      - name: Add Protocol Handler Registration
-        continue-on-error: false
-        shell: pwsh
-        run: |
-          $reg = @"
-          Windows Registry Editor Version 5.00
-
-          [HKEY_CLASSES_ROOT\\eoconnect]
-          @="URL:EO.Connect Protocol"
-          "URL Protocol"=""
-
-          [HKEY_CLASSES_ROOT\\eoconnect\\shell\\open\\command]
-          @="\"%ProgramFiles%\\EO.Connect-Admin\\EO.Connect-Admin.exe\" \"%1\""
-          "@
-          Set-Content -Path "rustdesk/protocol_handler.reg" -Value $reg -Encoding Unicode
-          Write-Host "Protocol handler .reg file created in rustdesk/"
-
-      - name: Add portable helper to install protocol handler
-        continue-on-error: false
-        shell: pwsh
-        run: |
-          Set-Content -Path "rustdesk/install-protocol-handler.cmd" -Value "@echo off`r`nreg import protocol_handler.reg`r`necho Installed EO.Connect protocol handler.`r`npause" -Encoding ASCII
-          Set-Content -Path "rustdesk/README-ProtocolHandler.txt" -Value "If running the portable app, double-click install-protocol-handler.cmd as Administrator to register the 'eoconnect:' URL protocol." -Encoding UTF8
-
       - name: Build MSI installer
         continue-on-error: false
         run: |
@@ -363,57 +339,13 @@ jobs:
           pushd ./res/msi
           # Overwrite RustDesk preprocess.py with our customized one from rdgen-resources
           cp ../../rdgen-resources/util/handler_files/preprocess.py ./preprocess.py
-          python preprocess.py --app-name "EO_Connect-Admin" --arp -d ../../rustdesk
-          # Inject WiX protocol handler after preprocess, before msbuild
-          $wxs = @'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-            <Fragment>
-              <DirectoryRef Id="INSTALLDIR">
-                <Component Id="EOC_Protocol" Guid="*">
-                  <RegistryValue Root="HKCR" Key="eoconnect" Value="URL:EO.Connect Protocol" Type="string" Action="write" KeyPath="yes" />
-                  <RegistryValue Root="HKCR" Key="eoconnect" Name="URL Protocol" Value="" Type="string" Action="write" />
-                  <RegistryValue Root="HKCR" Key="eoconnect\shell\open\command" Value="[INSTALLDIR]EO.Connect-Admin.exe \"%1\"" Type="string" Action="write" />
-                </Component>
-              </DirectoryRef>
-            </Fragment>
-            <Fragment>
-              <ComponentGroup Id="ProtocolComponents">
-                <ComponentRef Id="EOC_Protocol" />
-              </ComponentGroup>
-            </Fragment>
-          </Wix>
-          '@
-          Set-Content -Path 'ProtocolHandler.wxs' -Value $wxs -Encoding UTF8
-          $wixProj = (Get-ChildItem -Recurse -Filter *.wixproj | Select-Object -First 1).FullName
-          if (-not $wixProj) { throw 'No .wixproj found after preprocess.' }
-          Write-Host "Using WiX project: $wixProj"
-          $wixProjDir = Split-Path -Parent $wixProj
-          echo "WIX_PROJ_DIR=$wixProjDir" >> $Env:GITHUB_ENV
-          if (-not (Select-String -Path $wixProj -Pattern 'ProtocolHandler.wxs' -Quiet)) {
-            $proj = Get-Content $wixProj; $inserted = $false; $out = @()
-            foreach ($line in $proj) { $out += $line; if (-not $inserted -and $line -match '<ItemGroup>') { $out += '    <Compile Include="ProtocolHandler.wxs" />'; $inserted = $true } }
-            if (-not $inserted) { $out += '  <ItemGroup>'; $out += '    <Compile Include="ProtocolHandler.wxs" />'; $out += '  </ItemGroup>' }
-            Set-Content $wixProj ($out -join "`n") -Encoding UTF8
-          }
-          # Find a ComponentGroup referenced by any Feature and inject our ComponentRef before its closing tag
-          $wxsFiles = Get-ChildItem -Recurse -Filter *.wxs | Select-Object -Expand FullName
-          $groupRefMatch = Select-String -Path $wxsFiles -Pattern '<ComponentGroupRef\s+Id="([^"]+)"\s*/>' -AllMatches | Select-Object -First 1
-          if (-not $groupRefMatch) { throw 'No ComponentGroupRef found in WiX sources to attach protocol component.' }
-          $groupId = $groupRefMatch.Matches[0].Groups[1].Value
-          Write-Host "Injecting into ComponentGroup Id=$groupId"
-          $groupDefFile = (Select-String -Path $wxsFiles -Pattern "<ComponentGroup\s+Id=\"$groupId\"" -List | Select-Object -First 1).Path
-          if (-not $groupDefFile) { throw "ComponentGroup definition for '$groupId' not found." }
-          Write-Host "Group definition file: $groupDefFile"
-          $gcontent = Get-Content $groupDefFile -Raw
-          if ($gcontent -notmatch '<ComponentRef\s+Id="EOC_Protocol"\s*/>') {
-            $gcontent = $gcontent -replace '</ComponentGroup>', '    <ComponentRef Id="EOC_Protocol" />`n  </ComponentGroup>'
-            Set-Content $groupDefFile $gcontent -Encoding UTF8
-          }
+          python preprocess.py --app-name "EO_Connect-Admin" --arp -d ../../rustdesk    
+         
           nuget restore msi.sln
           msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
           cp ./Package/bin/x64/Release/en-us/Package.msi ../../SignOutput/EO.Connect-Admin.msi
           popd
+     
       - name: Sign final executables
         continue-on-error: true
         shell: pwsh
