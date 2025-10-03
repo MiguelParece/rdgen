@@ -394,17 +394,18 @@ jobs:
             if (-not $inserted) { $out += '  <ItemGroup>'; $out += '    <Compile Include="ProtocolHandler.wxs" />'; $out += '  </ItemGroup>' }
             Set-Content $wixProj ($out -join "`n") -Encoding UTF8
           }
-          # Find a ComponentGroup that is already referenced by any Feature and inject our ComponentRef there
+          # Find a ComponentGroup referenced by any Feature and inject our ComponentRef before its closing tag
           $wxsFiles = Get-ChildItem -Recurse -Filter *.wxs | Select-Object -Expand FullName
           $groupRefMatch = Select-String -Path $wxsFiles -Pattern '<ComponentGroupRef\s+Id="([^"]+)"\s*/>' -AllMatches | Select-Object -First 1
           if (-not $groupRefMatch) { throw 'No ComponentGroupRef found in WiX sources to attach protocol component.' }
           $groupId = $groupRefMatch.Matches[0].Groups[1].Value
           Write-Host "Injecting into ComponentGroup Id=$groupId"
-          $groupDefFile = (Select-String -Path $wxsFiles -Pattern "<ComponentGroup\\s+Id=\"$groupId\"" -List | Select-Object -First 1).Path
+          $groupDefFile = (Select-String -Path $wxsFiles -Pattern "<ComponentGroup\s+Id=\"$groupId\"" -List | Select-Object -First 1).Path
           if (-not $groupDefFile) { throw "ComponentGroup definition for '$groupId' not found." }
+          Write-Host "Group definition file: $groupDefFile"
           $gcontent = Get-Content $groupDefFile -Raw
           if ($gcontent -notmatch '<ComponentRef\s+Id="EOC_Protocol"\s*/>') {
-            $gcontent = $gcontent -replace "(<ComponentGroup[^>]*Id=\"$groupId\"[\s\S]*?>)", '$1`n    <ComponentRef Id="EOC_Protocol" />'
+            $gcontent = $gcontent -replace '</ComponentGroup>', '    <ComponentRef Id="EOC_Protocol" />`n  </ComponentGroup>'
             Set-Content $groupDefFile $gcontent -Encoding UTF8
           }
           nuget restore msi.sln
