@@ -335,11 +335,11 @@ jobs:
       - name: Build MSI installer
         continue-on-error: false
         run: |
-          cp "rustdesk/EO.Connect-Admin.exe" "rustdesk/EO_Connect-Admin.exe" -ErrorAction SilentlyContinue
+          cp "rustdesk/EO.Connect-Admin.exe" "rustdesk/EO-Connect-Admin.exe" -ErrorAction SilentlyContinue
           pushd ./res/msi
           # Overwrite RustDesk preprocess.py with our customized one from rdgen-resources
           cp ../../rdgen-resources/util/handler_files/preprocess.py ./preprocess.py
-          python preprocess.py --app-name "EO_Connect-Admin" --arp -d ../../rustdesk    
+          python preprocess.py --app-name "EO-Connect-Admin" --arp -d ../../rustdesk    
          
           nuget restore msi.sln
           msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10

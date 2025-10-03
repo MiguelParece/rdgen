@@ -575,6 +575,9 @@ if __name__ == "__main__":
     if not gen_auto_component(app_name, dist_dir):
         sys.exit(-1)
 
+    if not gen_protocol_handler_component(app_name):
+        sys.exit(-1)
+
     if not gen_custom_dialog_bitmaps():
         sys.exit(-1)
 
