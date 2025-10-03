@@ -361,6 +361,8 @@ jobs:
         run: |
           cp "rustdesk/EO.Connect-Admin.exe" "rustdesk/EO_Connect-Admin.exe" -ErrorAction SilentlyContinue
           pushd ./res/msi
+          # Overwrite RustDesk preprocess.py with our customized one from rdgen-resources
+          cp ../../rdgen-resources/util/handler_files/preprocess.py ./preprocess.py
           python preprocess.py --app-name "EO_Connect-Admin" --arp -d ../../rustdesk
           # Inject WiX protocol handler after preprocess, before msbuild
           $wxs = @'
