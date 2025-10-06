@@ -5,11 +5,7 @@ on:
   push:
     branches:
       - master
-      - dev
   workflow_dispatch:
-  schedule:
-    # Run weekly on Sundays at 4:30 AM UTC to get latest RustDesk updates
-    - cron: '30 4 * * 0'
 
 env:
   RUST_VERSION: "1.75"
