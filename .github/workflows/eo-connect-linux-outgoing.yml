@@ -2,6 +2,10 @@ name: EO.Connect Linux Outgoing Client
 run-name: EO.Connect Linux Outgoing Client
 
 on: 
+  push:
+    branches:
+      - master
+      - dev
   workflow_dispatch:
   schedule:
     # Run weekly on Sundays at 4:30 AM UTC to get latest RustDesk updates

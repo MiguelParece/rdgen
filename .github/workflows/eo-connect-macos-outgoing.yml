@@ -2,10 +2,10 @@ name: EO.Connect macOS Outgoing Client
 run-name: EO.Connect macOS Outgoing Client
 
 on: 
+  push:
+    branches:
+      - master
   workflow_dispatch:
-  schedule:
-    # Run weekly on Sundays at 3:30 AM UTC to get latest RustDesk updates
-    - cron: '30 3 * * 0'
 
 env:
   SCITER_RUST_VERSION: "1.75"

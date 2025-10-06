@@ -3,9 +3,9 @@ run-name: EO.Connect Android Outgoing Client
 
 on: 
   workflow_dispatch:
-  schedule:
-    # Run weekly on Sundays at 5 AM UTC to get latest RustDesk updates
-    - cron: '0 5 * * 0'
+  push:
+    branches:
+      - master
 
 env:
   RUST_VERSION: "1.75"

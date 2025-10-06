@@ -2,10 +2,10 @@ name: EO.Connect Windows Incoming Client
 run-name: EO.Connect Windows Incoming Client
 
 on: 
+  push:
+    branches:
+      - master
   workflow_dispatch:
-  schedule:
-    # Run weekly on Sundays at 2 AM UTC to get latest RustDesk updates
-    - cron: '0 2 * * 0'
 
 env:
   SCITER_RUST_VERSION: "1.75"

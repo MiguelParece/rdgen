@@ -2,10 +2,10 @@ name: EO.Connect Linux Incoming Client
 run-name: EO.Connect Linux Incoming Client
 
 on: 
+  push:
+    branches:
+      - master
   workflow_dispatch:
-  schedule:
-    # Run weekly on Sundays at 4 AM UTC to get latest RustDesk updates
-    - cron: '0 4 * * 0'
 
 env:
   RUST_VERSION: "1.75"
