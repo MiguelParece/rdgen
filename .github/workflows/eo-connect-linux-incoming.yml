@@ -111,15 +111,15 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          wget https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/allowCustom.diff
+          wget https://raw.githubusercontent.com/MiguelParece/rdgen/refs/heads/master/.github/patches/allowCustom.diff
           git apply allowCustom.diff
-          wget https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/removeSetupServerTip.diff
+          wget https://raw.githubusercontent.com/MiguelParece/rdgen/refs/heads/master/.github/patches/removeSetupServerTip.diff
           git apply removeSetupServerTip.diff
 
       - name: Enable Connection Manager (Incoming Support)
         continue-on-error: true
         run: |
-          wget https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/hidecm.diff
+          wget https://raw.githubusercontent.com/MiguelParece/rdgen/refs/heads/master/.github/patches/hidecm.diff
           git apply hidecm.diff
 
       - name: Configure connection delay fix and remove notifications

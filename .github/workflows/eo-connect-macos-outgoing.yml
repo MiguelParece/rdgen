@@ -115,9 +115,9 @@ jobs:
       - name: Apply EO.Connect patches
         continue-on-error: true
         run: |
-          wget https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/allowCustom.diff
+          wget https://raw.githubusercontent.com/MiguelParece/rdgen/refs/heads/master/.github/patches/allowCustom.diff
           git apply allowCustom.diff
-          wget https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/removeSetupServerTip.diff
+          wget https://raw.githubusercontent.com/MiguelParece/rdgen/refs/heads/master/.github/patches/removeSetupServerTip.diff
           git apply removeSetupServerTip.diff
 
       - name: Configure connection delay fix
@@ -312,7 +312,7 @@ jobs:
       - name: Create custom.txt configuration
         run: |
           CUSTOM_JSON='{"conn-type":"outgoing","disable-installation":"Y","disable-settings":"Y","app-name":"EO.Connect-Admin","override-settings":{},"default-settings":{"access-mode":"custom","enable-keyboard":"Y","enable-clipboard":"Y","enable-file-transfer":"Y","enable-audio":"Y","enable-tunnel":"Y","enable-remote-restart":"Y","enable-record-session":"Y","enable-block-input":"Y","allow-remote-config-modification":"N","direct-server":"N","hide-cm":"N","verification-method":"use-both-passwords","approve-mode":"password-click","theme":"dark"},"enable-lan-discovery":"Y","allow-auto-disconnect":"N","allow-remove-wallpaper":"Y"}'
-          echo -n "$CUSTOM_JSON" | base64 -w 0 > ./custom.txt
+          echo -n "$CUSTOM_JSON" | base64 | tr -d '\n' > ./custom.txt
 
       - name: Build EO.Connect-Admin
         run: |
