@@ -12,14 +12,14 @@ env:
   FLUTTER_VERSION: "3.24.5"
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
   VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
-  VERSION: "1.4.2"
+  VERSION: "1.4.3"
   UPLOAD_ARTIFACT: 'true'
 
 jobs:
   generate-bridge-linux:
     uses: ./.github/workflows/bridge.yml
     with:
-      version: "1.4.2"
+      version: "1.4.3"
 
   build-eo-connect-linux-incoming:
     needs: [generate-bridge-linux]
